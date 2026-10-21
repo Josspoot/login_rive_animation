@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
 
+import 'dart:async';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -14,9 +16,31 @@ class _LoginScreenState extends State<LoginScreen> {
   StateMachineController? _controller;
   SMIBool? _isChecking;
   SMIBool? _isHandsUp;
-  SMIBool? _trigSuccess;
-  SMIBool? _trigFail;
-  SMIBool? _numLook;
+  SMITrigger? _trigSuccess;
+  SMITrigger? _trigFail;
+  SMINumber? _numLook;
+
+  Timer? _typingDebounce;
+
+  final _emailFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _emailFocusNode.addListener(() {
+      if (_emailFocusNode.hasFocus) {
+        if (_isHandsUp != null) {
+          _isHandsUp?.change(false);
+          _numLook?.value = 50;
+        }
+      }
+    });
+
+    _passwordFocusNode.addListener(() {
+      _isHandsUp?.change(_passwordFocusNode.hasFocus);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,12 +75,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 10),
                 TextField(
+                  focusNode: _emailFocusNode,
                   onChanged: (value) {
                     if (_isHandsUp != null) {
-                      _isHandsUp!.change(false);
+                      //_isHandsUp!.change(false);
                     }
                     if (_isChecking != null) {
                       _isChecking!.change(true);
+                      final look = (value.length / 70.0 * 100).clamp(
+                        0.0,
+                        100.0,
+                      );
+                      _numLook?.value = look;
+                      _typingDebounce?.cancel();
+                      _typingDebounce = Timer(const Duration(seconds: 3), () {
+                        if (!mounted) return;
+                        _isChecking?.change(false);
+                      });
                     }
                   },
                   keyboardType: TextInputType.emailAddress,
@@ -70,12 +105,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 10),
                 TextField(
+                  focusNode: _passwordFocusNode,
                   onChanged: (value) {
                     if (_isHandsUp != null) {
                       _isHandsUp!.change(true);
                     }
                     if (_isChecking != null) {
-                      _isChecking!.change(false);
+                      //_isChecking!.change(false);
                     }
                   },
                   obscureText: _isObscure,
@@ -103,5 +139,13 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _typingDebounce?.cancel();
+    super.dispose();
   }
 }
