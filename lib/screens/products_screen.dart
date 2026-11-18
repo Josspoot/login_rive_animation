@@ -1,8 +1,11 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
+import 'login_screen.dart';
 
 class ProductsScreen extends StatelessWidget {
   const ProductsScreen({super.key});
@@ -22,10 +25,29 @@ class ProductsScreen extends StatelessWidget {
     throw Exception('Error al cargar productos de la API');
   }
 
+  // Close the Firebase session and go back to the login
+  Future<void> _logout(BuildContext context) async {
+    await FirebaseAuth.instance.signOut();
+    if (!context.mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Productos de Spring Boot')),
+      appBar: AppBar(
+        title: const Text('Productos de Spring Boot'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Cerrar sesión',
+            onPressed: () => _logout(context),
+          ),
+        ],
+      ),
       // 6.3 Draw each state of the request
       body: FutureBuilder<List<dynamic>>(
         future: fetchProducts(),
