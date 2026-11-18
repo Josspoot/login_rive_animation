@@ -1,7 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
 
 import 'dart:async';
+
+import 'products_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -30,6 +33,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? emailError;
   String? passError;
+  // General login error: it does not belong to a specific field
+  String? authError;
+
+  // 5.2 Loading state
+  bool _isLoading = false;
 
   // 4.3 Validadores
   bool isValidEmail(String email) {
@@ -45,7 +53,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return re.hasMatch(pass);
   }
 
-  void _onLogin() {
+  // 5.3 Async login
+  Future<void> _onLogin() async {
     final email = emailCtrl.text.trim();
     final pass = passwordCtrl.text;
 
@@ -55,6 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       emailError = emailTypeError;
       passError = passTypeError;
+      authError = null;
     });
 
     FocusScope.of(context).unfocus();
@@ -63,9 +73,54 @@ class _LoginScreenState extends State<LoginScreen> {
     _isHandsUp?.change(false);
     _numLook?.value = 50.0;
 
-    if (emailTypeError == null && passTypeError == null) {
+    if (emailTypeError != null || passTypeError != null) {
+      _trigFail?.fire();
+      return;
+    }
+
+    // 5.4 Show the spinner
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 5.5 Artificial delay so the spinner is visible, then Firebase validates
+      await Future.delayed(const Duration(seconds: 2));
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: pass,
+      );
+
+      // 5.6 Let the bear celebrate
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
       _trigSuccess?.fire();
-    } else {
+      await Future.delayed(const Duration(seconds: 2));
+
+      // 5.7 Replace the login so "back" does not return to it
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ProductsScreen()),
+      );
+    } on FirebaseAuthException catch (e) {
+      // 5.8 Wrong credentials: general message, no field is marked
+      if (!mounted) return;
+      const credentialCodes = {
+        'invalid-credential',
+        'wrong-password',
+        'user-not-found',
+        'invalid-email',
+      };
+      debugPrint('FirebaseAuth error: ${e.code}');
+      setState(() {
+        _isLoading = false;
+        authError = credentialCodes.contains(e.code)
+            ? 'Credenciales no válidas'
+            : 'No se pudo iniciar sesión. Intenta de nuevo.';
+      });
       _trigFail?.fire();
     }
   }
@@ -164,6 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   obscureText: _isObscure,
                   decoration: InputDecoration(
+                    errorText: passError,
                     hintText: "Password",
                     prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
@@ -190,16 +246,32 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                if (authError != null) ...[
+                  Text(
+                    authError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 MaterialButton(
                   minWidth: size.width,
                   height: 50,
                   color: Colors.blue,
+                  disabledColor: Colors.blue,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   textColor: Colors.white,
-                  child: const Text("Iniciar sesión"),
-                  onPressed: _onLogin,
+                  // 5.9 Spinner while Firebase answers
+                  onPressed: _isLoading ? null : _onLogin,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(color: Colors.white),
+                        )
+                      : const Text("Iniciar sesión"),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
